@@ -1,135 +1,301 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Імпортуємо основні хуки React: useState для стану та useEffect для побічних ефектів.
 
-const products = [
-  { id: 'apple', name: 'Яблуко', price: 50, icon: '🍎' },
-  { id: 'banana', name: 'Банан', price: 70, icon: '🍌' },
-  { id: 'orange', name: 'Апельсин', price: 60, icon: '🍊' },
-  { id: 'grape', name: 'Виноград', price: 120, icon: '🍇' },
-  { id: 'lemon', name: 'Лимон', price: 40, icon: '🍋' },
-];
-
-interface PurchaseItem {
-  id: string;
-  name: string;
-  icon: string;
-  quantity: number;
-  totalItemPrice: number;
-  timestamp: string;
-  unitPrice: number;
+// Опис інтерфейсу для структури одного продукту.
+interface Product {
+  id: string;    // Унікальний ідентифікатор товару (наприклад, 'apple').
+  name: string;  // Назва товару (наприклад, 'Яблуко').
+  price: number; // Ціна товару за одиницю (наприклад, 50).
+  icon: string;  // Емодзі або іконка, що відображає товар (наприклад, '🍎').
 }
 
+// Опис інтерфейсу для структури одного магазину.
+interface Shop {
+  id: string;        // Унікальний ідентифікатор магазину (наприклад, 'shop1').
+  name: string;      // Назва магазину (наприклад, 'Фруктовий Рай').
+  products: Product[]; // Масив товарів, доступних у цьому магазині.
+}
+
+// Константа, що містить інформацію про всі доступні магазини та їхні товари.
+const shops: Shop[] = [
+  {
+    id: 'shop1',
+    name: 'Фруктовий Рай',
+    products: [
+      { id: 'apple', name: 'Яблуко', price: 50, icon: '🍎' },
+      { id: 'banana', name: 'Банан', price: 70, icon: '🍌' },
+      { id: 'orange', name: 'Апельсин', price: 60, icon: '🍊' },
+      { id: 'grape', name: 'Виноград', price: 120, icon: '🍇' },
+      { id: 'lemon', name: 'Лимон', price: 40, icon: '🍋' },
+    ],
+  },
+  {
+    id: 'shop2',
+    name: 'Овочева Грядка',
+    products: [
+      { id: 'carrot', name: 'Морква', price: 30, icon: '🥕' },
+      { id: 'potato', name: 'Картопля', price: 25, icon: '🥔' },
+      { id: 'tomato', name: 'Помідор', price: 80, icon: '🍅' },
+      { id: 'cucumber', name: 'Огірок', price: 55, icon: '🥒' },
+      { id: 'onion', name: 'Цибуля', price: 20, icon: '🧅' },
+    ],
+  },
+  {
+    id: 'shop3',
+    name: 'Бакалія "Все включено"',
+    products: [
+      { id: 'bread', name: 'Хліб', price: 35, icon: '🍞' },
+      { id: 'milk', name: 'Молоко', price: 45, icon: '🥛' },
+      { id: 'eggs', name: 'Яйця', price: 75, icon: '🥚' },
+      { id: 'cheese', name: 'Сир', price: 150, icon: '🧀' },
+      { id: 'butter', name: 'Масло', price: 90, icon: '🧈' },
+    ],
+  },
+];
+
+// Опис інтерфейсу для елемента в історії покупок.
+interface PurchaseItem {
+  id: string;           // Унікальний ID для запису в історії (генерується при покупці).
+  name: string;         // Назва придбаного товару.
+  icon: string;         // Іконка придбаного товару.
+  quantity: number;     // Кількість придбаного товару.
+  totalItemPrice: number; // Загальна вартість цієї позиції (ціна за шт. * кількість).
+  timestamp: string;    // Час здійснення покупки (форматований рядок).
+  unitPrice: number;    // Ціна за одиницю товару на момент покупки.
+  shopName: string;     // Назва магазину, де було придбано товар.
+}
+
+// Головний функціональний компонент програми.
 function Home() {
-   const [initialBalanceInput, setInitialBalanceInput] = useState<string>('');
-  const [balance, setBalance] = useState<number>(0); 
+  // Стан для зберігання значення з поля вводу для поповнення балансу (тимчасове, як рядок).
+  const [initialBalanceInput, setInitialBalanceInput] = useState<string>('');
+
+  // Стан для поточного балансу гаманця.
+  // Ініціалізується з LocalStorage або 0, якщо даних немає або сталася помилка.
+  const [balance, setBalance] = useState<number>(() => {
+    try {
+      const savedBalance = localStorage.getItem('walletBalance');
+      // Якщо в LocalStorage є збережений баланс, парсимо його; інакше, встановлюємо 0.
+      return savedBalance ? parseFloat(savedBalance) : 0;
+    } catch (error) {
+      console.error("Помилка при зчитуванні балансу з LocalStorage:", error);
+      return 0; // Повертаємо 0 у випадку помилки.
+    }
+  });
+
+  // Стан для лічильника зроблених покупок (не зберігається в LocalStorage, лише для відображення сесії).
   const [purchaseCount, setPurchaseCount] = useState<number>(0);
+  
+  // Стан для зберігання кількості кожного вибраного товару перед покупкою.
+  // Ключ: ID товару, Значення: вибрана кількість.
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
 
-  // ЗМІНА: Стан для зберігання кількості вибраних товарів.
-  // Ключ: ID товару (string), Значення: Кількість (number)
-  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({}); 
+  // Стан для ID поточного активного магазину (за замовчуванням - ID першого магазину).
+  const [activeShopId, setActiveShopId] = useState<string>(shops[0].id);
+  // Знаходимо об'єкт активного магазину з масиву `shops` за його ID.
+  const activeShop = shops.find(shop => shop.id === activeShopId);
 
-  // ОНОВЛЕННЯ: Структура елемента історії покупок
-  const [purchaseHistory, setPurchaseHistory] = useState<
-    { id: string; name: string; icon: string; quantity: number; totalItemPrice: number; timestamp: string }[]
-  >([]);
+  // Стан для масиву історії покупок.
+  // Ініціалізується з LocalStorage або порожнім масивом, якщо даних немає/помилка.
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseItem[]>(() => {
+    try {
+      const savedHistory = localStorage.getItem('purchaseHistory');
+      // Якщо в LocalStorage є збережена історія, парсимо її з JSON; інакше, порожній масив.
+      return savedHistory ? JSON.parse(savedHistory) : [];
+    } catch (error) {
+      console.error("Помилка при зчитуванні історії покупок з LocalStorage:", error);
+      return []; // Повертаємо порожній масив у випадку помилки.
+    }
+  });
 
+  // Стан, який відстежує, чи є значущі дані В ІСТОРІЇ покупок у LocalStorage.
+  // Цей стан буде true, тільки якщо `purchaseHistory` у LocalStorage НЕ порожній.
+  const [hasLocalStorageData, setHasLocalStorageData] = useState<boolean>(false);
+
+  // **НОВА/ОНОВЛЕНА ФУНКЦІЯ:** Перевіряє, чи є значущі дані в LocalStorage.
+  // Ця версія сфокусована лише на `purchaseHistory`.
+  const checkLocalStorageData = () => {
+    try {
+      const savedHistory = localStorage.getItem('purchaseHistory');
+      let currentHistory: PurchaseItem[] = [];
+      // Намагаємося розпарсити збережену історію. Якщо є помилка або дані відсутні, вважаємо її порожньою.
+      if (savedHistory) {
+        try {
+          currentHistory = JSON.parse(savedHistory);
+        } catch (e) {
+          console.error("Помилка при парсингу збереженої історії:", e);
+          currentHistory = [];
+        }
+      }
+      // Повертаємо true, якщо довжина історії покупок більше 0.
+      return currentHistory.length > 0;
+    } catch (error) {
+      console.error("Помилка при перевірці даних LocalStorage:", error);
+      return false; // У випадку будь-якої помилки припускаємо, що значущих даних немає.
+    }
+  };
+
+  // **НОВИЙ useEffect:** Запускається лише один раз при монтуванні компонента.
+  // Його завдання - ініціалізувати стан `hasLocalStorageData` на основі поточної історії покупок.
+  useEffect(() => {
+    setHasLocalStorageData(checkLocalStorageData());
+  }, []); // Пустий масив залежностей означає, що ефект запускається тільки один раз при завантаженні.
+
+  // **ОНОВЛЕНИЙ useEffect:** Зберігає баланс у LocalStorage щоразу, коли він змінюється.
+  // Важливо: Цей ефект БІЛЬШЕ НЕ ВПЛИВАЄ на `hasLocalStorageData`, оскільки кнопка залежить лише від історії покупок.
+  useEffect(() => {
+    localStorage.setItem('walletBalance', balance.toString());
+    // setHasLocalStorageData(checkLocalStorageData()); // Цей рядок було ВИДАЛЕНО!
+  }, [balance]); // Ефект запускається щоразу, коли змінюється значення `balance`.
+
+  // **ОНОВЛЕНИЙ useEffect:** Зберігає історію покупок у LocalStorage щоразу, коли вона змінюється.
+  // Цей ефект також оновлює стан `hasLocalStorageData`, оскільки кнопка залежить від історії.
+  useEffect(() => {
+    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+    setHasLocalStorageData(checkLocalStorageData()); // Оновлюємо стан наявності даних в історії.
+  }, [purchaseHistory]); // Ефект запускається щоразу, коли змінюється `purchaseHistory`.
+
+  // useEffect, який спрацьовує при зміні активного магазину.
+  // Очищає вибрані кількості товарів при перемиканні магазину.
+  useEffect(() => {
+    if (activeShop) {
+      setSelectedQuantities({}); // Очищаємо всі вибрані кількості товарів.
+    }
+  }, [activeShopId]); // Ефект запускається щоразу, коли змінюється `activeShopId`.
+
+  // Парсимо вхідне значення поповнення балансу в число з плаваючою комою.
   const parsedInitialBalance: number = parseFloat(initialBalanceInput);
 
-  // Розраховуємо загальну суму вибраних товарів
+  // Функція для розрахунку загальної вартості вибраних товарів.
   const calculateTotalSelectedPrice = (): number => {
     let total = 0;
-    // Перебираємо об'єкт selectedQuantities
+    // Перебираємо всі товари, для яких вибрана кількість.
     for (const productId in selectedQuantities) {
-      const quantity = selectedQuantities[productId];
-      const product = products.find(p => p.id === productId);
-      // Додаємо до загальної суми: ціна товару * його кількість
-      if (product && quantity > 0) { 
+      const quantity = selectedQuantities[productId]; // Отримуємо кількість.
+      // Знаходимо товар у списку товарів активного магазину за його ID.
+      const product = activeShop?.products.find(p => p.id === productId);
+      // Якщо товар знайдено і кількість більша за 0, додаємо до загальної суми.
+      if (product && quantity > 0) {
         total += product.price * quantity;
       }
     }
-    return total;
+    return total; // Повертаємо загальну вартість.
   };
 
+  // Змінна, що зберігає загальну суму до сплати за вибрані товари.
   const paymentAmount: number = calculateTotalSelectedPrice();
 
-  // --- Обробники для поповнення балансу (без змін) ---
+  // Обробник зміни значення в полі вводу для поповнення балансу.
   const handleInitialBalanceChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setInitialBalanceInput(event.target.value);
+    setInitialBalanceInput(event.target.value); // Оновлюємо стан `initialBalanceInput`.
   };
 
+  // Обробник для кнопки "Поповнити Баланс".
   const setCustomBalance = () => {
+    // Перевіряємо, чи введено дійсне додатне число.
     if (isNaN(parsedInitialBalance) || parsedInitialBalance < 0) {
       alert("Будь ласка, введіть дійсне додатне число для поповнення балансу.");
-      return;
+      return; // Виходимо з функції.
     }
-    setBalance(prevBalance => prevBalance + parsedInitialBalance); 
-    setInitialBalanceInput(''); 
+    // Оновлюємо баланс, додаючи введену суму.
+    setBalance(prevBalance => prevBalance + parsedInitialBalance);
+    setInitialBalanceInput(''); // Очищаємо поле вводу.
   };
-  // --- Кінець обробників для поповнення балансу ---
 
-  // НОВИЙ ОБРОБНИК: Зміна кількості товару
+  // Обробник зміни кількості товару (додавання або віднімання).
   const handleQuantityChange = (productId: string, change: number) => {
+    // Оновлюємо стан `selectedQuantities` безпечним способом (функціональне оновлення).
     setSelectedQuantities(prevQuantities => {
-      const newQuantities = { ...prevQuantities }; // Створюємо копію об'єкта стану
+      const newQuantities = { ...prevQuantities }; // Створюємо копію попереднього об'єкта.
+      const currentQty = newQuantities[productId] || 0; // Поточна кількість товару або 0.
 
-      const currentQty = newQuantities[productId] || 0; // Поточна кількість або 0
-
-      if (change > 0) { // Додаємо кількість
+      if (change > 0) { // Якщо додаємо товар.
         newQuantities[productId] = currentQty + change;
-      } else if (change < 0) { // Віднімаємо кількість
-        if (currentQty + change <= 0) { // Якщо кількість стає 0 або менше, видаляємо товар з вибору
+      } else if (change < 0) { // Якщо віднімаємо товар.
+        if (currentQty + change <= 0) { // Якщо кількість стає 0 або менше, видаляємо товар.
           delete newQuantities[productId];
-        } else { // Зменшуємо кількість
+        } else { // Інакше, просто зменшуємо кількість.
           newQuantities[productId] = currentQty + change;
         }
       }
-      return newQuantities; // Повертаємо новий об'єкт для оновлення стану
+      return newQuantities; // Повертаємо оновлений об'єкт.
     });
   };
 
-  // ОНОВЛЕНИЙ ОБРОБНИК: handlePayment
+  // Обробник для кнопки "Здійснити покупку".
   const handlePayment = () => {
+    // Перевіряємо, чи вибрано хоча б один товар.
     if (paymentAmount === 0) {
       alert("Будь ласка, виберіть товари для покупки.");
       return;
     }
 
+    // Перевіряємо, чи достатньо коштів на балансі.
     if (balance >= paymentAmount) {
-      setBalance(prevBalance => prevBalance - paymentAmount);
-      setPurchaseCount(prevCount => prevCount + 1);
+      setBalance(prevBalance => prevBalance - paymentAmount); // Зменшуємо баланс.
+      setPurchaseCount(prevCount => prevCount + 1); // Збільшуємо лічильник покупок.
 
-      // Готуємо записи для історії покупок з урахуванням кількості
-      const newPurchaseEntries: PurchaseItem[] = [];
+      const newPurchaseEntries: PurchaseItem[] = []; // Масив для нових записів історії.
+      // Проходимо по всіх вибраних товарах.
       for (const productId in selectedQuantities) {
         const quantity = selectedQuantities[productId];
-        const product = products.find(p => p.id === productId);
+        const product = activeShop?.products.find(p => p.id === productId);
         if (product && quantity > 0) {
+          // Додаємо новий запис про покупку.
           newPurchaseEntries.push({
-            id: `${product.id}-${Date.now()}-${Math.random()}`, // Унікальний ID для кожної позиції в історії
+            id: `${product.id}-${Date.now()}-${Math.random()}`, // Унікальний ID.
             name: product.name,
             icon: product.icon,
-            unitPrice: product.price, // Ціна за одиницю
-            quantity: quantity, // Кількість придбаного товару
-            totalItemPrice: product.price * quantity, // Загальна ціна за цю кількість товару
-            timestamp: new Date().toLocaleString()
+            unitPrice: product.price,
+            quantity: quantity,
+            totalItemPrice: product.price * quantity,
+            timestamp: new Date().toLocaleString(), // Поточний час.
+            shopName: activeShop?.name || 'Невідомий магазин'
           });
         }
       }
-      
-      setPurchaseHistory(prevHistory => [...newPurchaseEntries, ...prevHistory]); // Додаємо нові записи
-      setSelectedQuantities({}); // Очищуємо вибрані товари після покупки
+
+      // Оновлюємо історію покупок, додаючи нові записи на початок масиву.
+      setPurchaseHistory(prevHistory => [...newPurchaseEntries, ...prevHistory]);
+      setSelectedQuantities({}); // Очищаємо всі вибрані товари після успішної покупки.
     } else {
+      // Повідомлення про недостатність коштів.
       alert(`Недостатньо коштів на рахунку! Потрібно ${paymentAmount} грн, а у вас ${balance} грн.`);
     }
   };
 
-  const isSetBalanceButtonDisabled: boolean = isNaN(parsedInitialBalance) || parsedInitialBalance < 0;
+  // Обробник зміни вибраного магазину.
+  const handleShopChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setActiveShopId(event.target.value); // Оновлюємо ID активного магазину.
+  };
 
-  // Логіка блокування кнопки "Здійснити покупку" (без змін, paymentAmount вже враховує кількість)
+  // **НОВА ФУНКЦІЯ:** Очищення всіх даних з LocalStorage.
+  const clearAllLocalStorageData = () => {
+    // Запитуємо підтвердження у користувача перед видаленням.
+    if (window.confirm("Ви впевнені, що хочете видалити всі дані (баланс та історію покупок) з LocalStorage? Цю дію не можна скасувати.")) {
+      localStorage.removeItem('walletBalance'); // Видаляємо баланс.
+      localStorage.removeItem('purchaseHistory'); // Видаляємо історію.
+      setBalance(0); // Скидаємо баланс у стані React.
+      setPurchaseHistory([]); // Скидаємо історію у стані React.
+      setPurchaseCount(0); // Скидаємо лічильник покупок.
+      setSelectedQuantities({}); // Очищаємо вибрані товари.
+      setHasLocalStorageData(false); // **ВАЖЛИВО:** Встановлюємо `false` після очищення, щоб кнопка зникла.
+      alert("Всі дані LocalStorage були видалені."); // Повідомлення про успішне видалення.
+    }
+  };
+
+  // Логіка для вимкнення кнопки поповнення балансу.
+  const isSetBalanceButtonDisabled: boolean = isNaN(parsedInitialBalance) || parsedInitialBalance < 0;
+  // Логіка для вимкнення кнопки покупки.
   const isPurchaseButtonDisabled: boolean = paymentAmount === 0 || balance < paymentAmount || balance === 0;
+
+  // Відображення повідомлення, якщо активний магазин ще не завантажився (малоймовірно).
+  if (!activeShop) {
+    return <div>Завантаження магазину...</div>;
+  }
 
   return (
     <>
-      <h1>Гаманець витрат</h1>
+      <h1>Управління Балансом</h1>
 
       <div>
         <label htmlFor="initialBalance">Введіть суму для поповнення балансу:</label>
@@ -153,18 +319,27 @@ function Home() {
       <h3>Кількість зроблених покупок: {purchaseCount}</h3>
       <h3>Загальна сума вибраних товарів: {paymentAmount} грн</h3>
 
-      <h3>Оберіть товари та їх кількість:</h3>
+      <div style={{ marginBottom: '20px' }}>
+        <label htmlFor="shop-select" style={{ marginRight: '10px' }}>Оберіть магазин:</label>
+        <select id="shop-select" value={activeShopId} onChange={handleShopChange}>
+          {shops.map(shop => (
+            <option key={shop.id} value={shop.id}>
+              {shop.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <h3>Товари магазину "{activeShop.name}":</h3>
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '20px' }}>
-        {products.map(product => {
-          const currentQuantity = selectedQuantities[product.id] || 0; // Отримуємо поточну кількість для цього товару
+        {activeShop.products.map(product => {
+          const currentQuantity = selectedQuantities[product.id] || 0; 
           return (
             <div 
               key={product.id}
-              // Клік на самому елементі може збільшувати кількість на 1, або керуватися лише кнопками
-              // onClick={() => handleQuantityChange(product.id, 1)} // Можна додати для швидкого додавання
               style={{
                 cursor: 'pointer',
-                border: `2px solid ${currentQuantity > 0 ? 'blue' : '#ccc'}`, // Рамка, якщо кількість > 0
+                border: `2px solid ${currentQuantity > 0 ? 'blue' : '#ccc'}`,
                 borderRadius: '8px',
                 padding: '10px 15px',
                 textAlign: 'center',
@@ -181,11 +356,10 @@ function Home() {
               <p style={{ margin: '5px 0 0 0', fontWeight: 'bold' }}>{product.name}</p>
               <p style={{ margin: '0', color: '#555' }}>{product.price} грн/шт.</p>
               
-              {/* Кнопки +1 / -1 та відображення кількості */}
               <div style={{ display: 'flex', alignItems: 'center', marginTop: '10px' }}>
                 <button 
-                  onClick={(e) => { e.stopPropagation(); handleQuantityChange(product.id, -1); }} // e.stopPropagation() щоб клік на кнопці не викликав клік на батьківському div
-                  disabled={currentQuantity === 0} // Вимикаємо кнопку "-", якщо кількість 0
+                  onClick={(e) => { e.stopPropagation(); handleQuantityChange(product.id, -1); }} 
+                  disabled={currentQuantity === 0} 
                   style={{ fontSize: '1.2em', padding: '5px 10px', margin: '0 5px' }}
                 >
                   -
@@ -212,6 +386,7 @@ function Home() {
         Здійснити покупку
       </button>
 
+      {/* Умовні повідомлення для користувача */}
       {balance === 0 && purchaseCount === 0 && parsedInitialBalance === 0 && paymentAmount === 0 ? (
         <p style={{ color: 'blue' }}>Будь ласка, поповніть баланс, щоб почати покупки.</p>
       ) : balance === 0 && purchaseCount > 0 && paymentAmount === 0 ? (
@@ -225,7 +400,7 @@ function Home() {
       )}
 
       {/* Секція ІСТОРІЇ ПОКУПОК */}
-      {purchaseHistory.length > 0 && (
+      {purchaseHistory.length > 0 && ( // Відображаємо історію лише якщо вона не порожня.
         <>
           <hr />
           <h2>Історія Покупок</h2>
@@ -233,17 +408,19 @@ function Home() {
             <thead>
               <tr style={{ background: '#f2f2f2' }}>
                 <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Час</th>
+                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Магазин</th>
                 <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Товар</th>
                 <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Іконка</th>
-                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>Кількість</th> {/* Нова колонка */}
-                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Ціна за шт. (грн)</th> {/* Нова колонка */}
-                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Загалом (грн)</th> {/* Нова колонка */}
+                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>Кількість</th>
+                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Ціна за шт. (грн)</th>
+                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Загалом (грн)</th>
               </tr>
             </thead>
             <tbody>
               {purchaseHistory.map((item, index) => (
                 <tr key={item.id} style={{ background: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                   <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.timestamp}</td>
+                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.shopName}</td>
                   <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.name}</td>
                   <td style={{ padding: '8px', border: '1px solid #ddd', fontSize: '1.2em' }}>{item.icon}</td>
                   <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{item.quantity}</td>
@@ -254,6 +431,27 @@ function Home() {
             </tbody>
           </table>
         </>
+      )}
+
+      <hr />
+      {/* УМОВНЕ ВІДОБРАЖЕННЯ КНОПКИ: 
+          Кнопка "Видалити все з LocalStorage" відображається лише тоді, 
+          коли `hasLocalStorageData` є `true` (що означає, що є записи в історії покупок). */}
+      {hasLocalStorageData && ( 
+        <button 
+          onClick={clearAllLocalStorageData}
+          style={{ 
+            backgroundColor: '#dc3545', // Червоний колір фону.
+            color: 'white',            // Білий колір тексту.
+            padding: '10px 20px',      // Відступи всередині кнопки.
+            border: 'none',            // Без рамки.
+            borderRadius: '5px',       // Заокруглені кути.
+            cursor: 'pointer',         // Курсор-покажчик при наведенні.
+            marginTop: '20px'          // Відступ зверху.
+          }}
+        >
+          Видалити все з LocalStorage
+        </button>
       )}
     </>
   );
