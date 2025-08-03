@@ -12,3 +12,4 @@
 ## Стек технологій:
 
 React + TypeScript
+fgfgfgf
